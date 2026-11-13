@@ -401,15 +401,15 @@ function evaluateLog(data) {
 
   let descScore = 0;
   if (description.length >= 20) descScore += 15;
-  if (/(fraud|unauthori[sz]ed|unknown|suspicious)/.test(desc)) descScore += 10;
-  if (/(4[,.]?890|4890|€)/.test(desc)) descScore += 10;
-  if (/(bank|account|transaction)/.test(desc)) descScore += 5;
+  if (/(fraud|unauthori[sz]ed|unknown|suspicious|non autoris|inconnu|suspect)/.test(desc)) descScore += 10;
+  if (/(4[,.]?890|4\s?890|4890|€)/.test(desc)) descScore += 10;
+  if (/(bank|account|transaction|banque|compte|bancaire)/.test(desc)) descScore += 5;
   score += descScore;
   if (descScore < 40) issues.push({ field: "description", key: "issueDescription" });
 
   let affScore = 0;
   if (affected.length >= 3) affScore += 10;
-  if (/(bank|account|card|funds|money)/.test(aff)) affScore += 10;
+  if (/(bank|account|card|funds|money|compte|bancaire|carte|fonds|argent)/.test(aff)) affScore += 10;
   score += affScore;
   if (affScore < 20) issues.push({ field: "affected", key: "issueAffected" });
 
