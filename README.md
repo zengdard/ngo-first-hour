@@ -6,8 +6,20 @@ A phone-first, bilingual (EN/FR) incident-response game for NGO training.
 - **Individual game:** fraudulent bank transaction, with a four-field log sheet
   (name, time, description, affected).
 - **Presenter mode** and **player mode** share the same content.
+- **No questionnaire:** the app shows simulations of familiar app screens (mail, bank login, phone, messages); the presenter asks the questions and the room decides orally.
 - Scenario A includes a **fake bank login screen imitation**, shown only after a wrong click, to make the consequence tangible.
 - **No account, no backend, no data stored.** Everything runs in the browser.
+
+## Direct URLs for QR codes
+
+- `/#/phishing` — Scenario A, player mode
+- `/#/presenter/phishing` — Scenario A, presenter mode
+- `/#/laptop` — Scenario B, player mode
+- `/#/presenter/laptop` — Scenario B, presenter mode
+- `/#/log` — individual log sheet
+- `/#/demo` — all links with copy buttons
+
+Use these URLs to generate the QR codes for the slides.
 
 ## Local preview
 

@@ -633,3 +633,234 @@ button.option.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
   .lang button { padding: 0.3rem 0.5rem; }
   .prompt { font-size: 1.2rem; }
 }
+
+/* ---------- Simulation UI ---------- */
+
+.cue {
+  border-left: 5px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  border-radius: 0 12px 12px 0;
+  padding: 0.8rem 0.95rem;
+  margin: 0 0 1rem;
+  font-size: 0.95rem;
+}
+.cue strong { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.phone-app {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  margin: 1rem 0;
+  box-shadow: var(--shadow);
+}
+.app-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.app-title { font-weight: 800; font-size: 1.15rem; }
+.app-sub { color: var(--soft); font-size: 0.85rem; }
+.icon-btn {
+  border: 0;
+  background: transparent;
+  font-size: 1.7rem;
+  line-height: 1;
+  padding: 0 0.4rem 0 0;
+  color: var(--ink);
+}
+
+.search-bar {
+  margin: 0.7rem 1rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: var(--soft);
+  font-size: 0.9rem;
+}
+
+.mail-list { display: grid; }
+.mail-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 0.8rem 1rem;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+}
+.mail-row:hover { background: #f8fafc; }
+.mail-row.unread { background: #f0fdfa; }
+.mail-row-text { display: grid; gap: 0.1rem; min-width: 0; flex: 1; }
+.mail-row-text strong { font-size: 0.95rem; overflow-wrap: anywhere; }
+.mail-row-text span { font-size: 0.9rem; color: var(--muted); }
+.mail-row-text .preview { color: var(--soft); font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mail-time { color: var(--soft); font-size: 0.75rem; white-space: nowrap; }
+
+.avatar {
+  flex: 0 0 2.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: #0f172a;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.avatar.soft { background: #e2e8f0; color: #334155; }
+
+.mail-detail-head { display: flex; gap: 0.7rem; align-items: center; padding: 1rem 1rem 0.4rem; }
+.mail-detail-head strong { display: block; overflow-wrap: anywhere; }
+.mail-detail-head span { color: var(--soft); font-size: 0.85rem; }
+.phone-app > h3, .phone-app > p { padding: 0 1rem; }
+.phone-app > h3 { margin-top: 0.6rem; }
+.phone-app .mail-link { padding: 0 1rem; }
+.phone-app .attachment { margin: 0 1rem 1rem; }
+.action-row { display: flex; flex-wrap: wrap; gap: 0.55rem; padding: 0.9rem 1rem 1rem; }
+.action-row button { flex: 1 1 auto; }
+
+.ransom-screen {
+  background: #0f172a;
+  border-radius: var(--radius);
+  padding: 1.2rem;
+  margin: 1rem 0;
+}
+.ransom-card {
+  background: #1e293b;
+  border: 1px solid #7f1d1d;
+  border-radius: 14px;
+  padding: 1.2rem;
+  color: #fecaca;
+}
+.ransom-card h2 { color: #fff; }
+.ransom-card p { color: #fecaca; }
+.ransom-card .eyebrow { color: #fca5a5; }
+button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+button.danger:hover { background: #991b1b; }
+
+.check-list { display: grid; gap: 0.6rem; margin: 1rem 0; }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+}
+.check.on { border-color: var(--good); background: var(--good-soft); }
+.check-box {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  border: 2px solid #94a3b8;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: var(--good);
+  flex: 0 0 auto;
+}
+.check.on .check-box { border-color: var(--good); background: #fff; }
+
+.contact-list { display: grid; }
+.contact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 1rem;
+  border-top: 1px solid var(--line);
+}
+.contact-info { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.contact-info strong { display: block; }
+.contact-info span { color: var(--soft); font-size: 0.82rem; }
+.contact-row button { padding: 0.5rem 0.8rem; }
+
+.chat-app { background: #e5e7eb; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; margin: 1rem 0; }
+.chat-bubble {
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  margin: 0.8rem 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.chat-input {
+  display: block;
+  width: calc(100% - 2rem);
+  margin: 0 1rem 0.8rem;
+  min-height: 120px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 0.8rem;
+  resize: vertical;
+}
+
+.file-app { background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; margin: 1rem 0; }
+.file-banner { margin: 0; padding: 0.9rem 1rem; background: #fef3c7; color: #78350f; font-size: 0.92rem; }
+.file-list { display: grid; }
+.file-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+.file-icon { font-size: 1.2rem; }
+
+.demo-list { display: grid; gap: 0.6rem; margin: 1rem 0; }
+.demo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem 0.9rem;
+}
+.demo-meta { min-width: 0; }
+.demo-meta strong { display: block; font-size: 0.95rem; }
+.demo-url {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--accent-dark);
+  overflow-wrap: anywhere;
+}
+.copy-btn { flex: 0 0 auto; padding: 0.45rem 0.7rem; }
+
+.balance { padding: 0.9rem 1rem; }
+.balance span { display: block; color: var(--soft); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.balance strong { font-size: 1.8rem; letter-spacing: -0.03em; }
+.tx-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #fff7ed;
+}
+.tx-row strong { color: var(--danger); font-size: 1.15rem; }
+.bank-app .warning { padding: 0 1rem 0.9rem; }
+
+@media (max-width: 420px) {
+  .demo-row { flex-direction: column; align-items: stretch; }
+  .copy-btn { width: 100%; }
+  .action-row button { flex: 1 1 100%; }
+}

@@ -1,8 +1,7 @@
 /* 9:14 — The First Hour
-   Static, bilingual (EN/FR), phone-first. No backend, no account. */
+   Simulation-first, bilingual (EN/FR), phone-first. No questionnaire, no backend. */
 
 const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 const esc = (value = "") =>
   String(value).replace(/[&<>"']/g, (char) => ({
@@ -13,9 +12,6 @@ const esc = (value = "") =>
     "'": "&#39;",
   }[char]));
 
-const t = (template, vars = {}) =>
-  String(template).replace(/\{(\w+)\}/g, (_, key) => (vars[key] ?? `{${key}}`));
-
 let lang = localStorage.getItem("ngogame.lang");
 if (!lang || !CONTENT[lang]) {
   lang = navigator.language && navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
@@ -24,48 +20,160 @@ if (!lang || !CONTENT[lang]) {
 const c = () => CONTENT[lang];
 
 const state = {
-  screen: "home",
-  mode: "player",
-  team: "",
   scenarioId: null,
-  step: 0,
-  score: 0,
-  selected: null,
-  answers: [],
-  completed: {},
-  meters: { time: 60, trust: 50, contain: 0 },
-  showFakeLogin: false,
-  individual: { name: "", time: "", description: "", affected: "" },
-  individualResult: null,
+  mode: "player",
+  screen: "inbox",
+  ransomAction: null,
+  laptopAction: null,
+  containActions: [],
+  contacts: [],
+  log: { name: "", time: "", description: "", affected: "" },
+  message: "",
+  logResult: null,
 };
 
-let scrollOnRender = true;
+let routeKey = null;
+
+/* ---------- Routing ---------- */
+
+function readRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const parts = raw.split("/").filter(Boolean);
+  if (!parts.length) return { name: "home" };
+  if (parts[0] === "demo") return { name: "demo" };
+  if (parts[0] === "group") return { name: "group" };
+  if (parts[0] === "log") return { name: "log" };
+  if (parts[0] === "presenter" && parts[1]) {
+    return { name: "scenario", mode: "presenter", id: parts[1] };
+  }
+  if ((parts[0] === "phishing" || parts[0] === "laptop") && parts.length === 1) {
+    return { name: "scenario", mode: "player", id: parts[0] };
+  }
+  return { name: "home" };
+}
+
+function navigate(path = "") {
+  const target = path ? `#/${path}` : "#/";
+  if (location.hash === target) {
+    render();
+    return;
+  }
+  location.hash = target;
+}
+
+/* ---------- State ---------- */
+
+function resetScenario(id, mode) {
+  state.scenarioId = id;
+  state.mode = mode;
+  state.screen = id === "phishing" ? "inbox" : "device";
+  state.ransomAction = null;
+  state.laptopAction = null;
+  state.containActions = [];
+  state.contacts = [];
+  state.log = { name: "", time: "", description: "", affected: "" };
+  state.message = "";
+  state.logResult = null;
+}
+
+function resetLog() {
+  state.log = { name: "", time: "", description: "", affected: "" };
+  state.logResult = null;
+}
 
 /* ---------- Chrome ---------- */
 
 function syncChrome() {
   const ui = c().ui;
   document.documentElement.lang = lang;
-  const brand = $("#brand-sub");
-  if (brand) brand.textContent = ui.brandSubtitle;
-  const navHome = $("#nav-home");
-  if (navHome) navHome.textContent = ui.navHome;
-  const navGroup = $("#nav-group");
-  if (navGroup) navGroup.textContent = ui.navGroup;
-  const navIndividual = $("#nav-individual");
-  if (navIndividual) navIndividual.textContent = ui.navIndividual;
-  const footer = $("#footer-text");
-  if (footer) footer.textContent = ui.footer;
-  $$(".lang button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.lang === lang);
-    button.setAttribute("aria-pressed", button.dataset.lang === lang ? "true" : "false");
+  const map = {
+    "#brand-sub": ui.brandSubtitle,
+    "#nav-home": ui.navHome,
+    "#nav-group": ui.navGroup,
+    "#nav-individual": ui.navIndividual,
+    "#footer-text": ui.footer,
+  };
+  Object.entries(map).forEach(([selector, text]) => {
+    const el = $(selector);
+    if (el) el.textContent = text;
+  });
+  document.querySelectorAll(".lang button").forEach((button) => {
+    const active = button.dataset.lang === lang;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
   });
 }
 
-/* ---------- Views ---------- */
+/* ---------- Shared UI ---------- */
+
+function cueBlock(key) {
+  if (state.mode !== "presenter") return "";
+  const sim = c().sim;
+  if (!sim[key]) return "";
+  return `<div class="cue"><strong>${sim.presenterCue}</strong> ${esc(sim[key])}</div>`;
+}
+
+function modeBadge() {
+  const sim = c().sim;
+  return `<span class="badge ${state.mode === "presenter" ? "presenter" : ""}">${
+    state.mode === "presenter" ? sim.presenter : sim.player
+  }</span>`;
+}
+
+function initials(name) {
+  return name
+    .split(/\s+/)
+    .map((word) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function logFields(prefix) {
+  const ui = c().ui;
+  return `
+    <div class="form-grid">
+      <div class="field">
+        <label for="${prefix}-name">${ui.nameLabel} <span class="hint">${ui.nameHint}</span></label>
+        <input id="${prefix}-name" type="text" maxlength="120" value="${esc(state.log.name)}"
+          placeholder="${esc(ui.namePlaceholder)}" />
+      </div>
+      <div class="field">
+        <label for="${prefix}-time">${ui.timeLabel} <span class="hint">${ui.timeHint}</span></label>
+        <input id="${prefix}-time" type="text" maxlength="80" value="${esc(state.log.time)}"
+          placeholder="${esc(ui.timePlaceholder)}" />
+      </div>
+      <div class="field">
+        <label for="${prefix}-description">${ui.descriptionLabel} <span class="hint">${ui.descriptionHint}</span></label>
+        <textarea id="${prefix}-description" maxlength="1200"
+          placeholder="${esc(ui.descriptionPlaceholder)}">${esc(state.log.description)}</textarea>
+      </div>
+      <div class="field">
+        <label for="${prefix}-affected">${ui.affectedLabel} <span class="hint">${ui.affectedHint}</span></label>
+        <input id="${prefix}-affected" type="text" maxlength="200" value="${esc(state.log.affected)}"
+          placeholder="${esc(ui.affectedPlaceholder)}" />
+      </div>
+    </div>
+  `;
+}
+
+function readLog(prefix) {
+  return {
+    name: $(`#${prefix}-name`)?.value || "",
+    time: $(`#${prefix}-time`)?.value || "",
+    description: $(`#${prefix}-description`)?.value || "",
+    affected: $(`#${prefix}-affected`)?.value || "",
+  };
+}
+
+/* ---------- Home and demo ---------- */
 
 function homeView() {
   const ui = c().ui;
+  const sim = c().sim;
+  const phishing = c().scenarios.phishing;
+  const laptop = c().scenarios.laptop;
+
   return `
     <section class="hero">
       <p class="eyebrow">${ui.homeEyebrow}</p>
@@ -76,309 +184,487 @@ function homeView() {
 
     <div class="grid">
       <article class="card">
-        <span class="tag">${ui.groupTag}</span>
-        <h2>${ui.groupTitle}</h2>
-        <p>${ui.groupText}</p>
+        <span class="tag">${sim.phishing}</span>
+        <h2>${esc(phishing.title)}</h2>
+        <p>${esc(phishing.subtitle)}</p>
         <div class="btn-row">
-          <button class="primary" data-action="start-group" data-mode="presenter">${ui.presenterBtn}</button>
-          <button class="secondary" data-action="start-group" data-mode="player">${ui.playerBtn}</button>
+          <button class="primary" data-action="go" data-path="presenter/phishing">${sim.presenter}</button>
+          <button class="secondary" data-action="go" data-path="phishing">${sim.player}</button>
         </div>
       </article>
 
       <article class="card">
-        <span class="tag warn">${ui.individualTag}</span>
+        <span class="tag">${sim.laptop}</span>
+        <h2>${esc(laptop.title)}</h2>
+        <p>${esc(laptop.subtitle)}</p>
+        <div class="btn-row">
+          <button class="primary" data-action="go" data-path="presenter/laptop">${sim.presenter}</button>
+          <button class="secondary" data-action="go" data-path="laptop">${sim.player}</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <span class="tag warn">${sim.log}</span>
         <h2>${ui.individualTitle}</h2>
         <p>${ui.individualText}</p>
         <div class="btn-row">
-          <button class="primary" data-action="start-individual">${ui.individualBtn}</button>
+          <button class="primary" data-action="go" data-path="log">${sim.start}</button>
         </div>
       </article>
     </div>
 
-    <div class="notice" style="margin-top:1.2rem">${ui.noAccount}</div>
-  `;
-}
-
-function groupSelectView() {
-  const ui = c().ui;
-  const isPresenter = state.mode === "presenter";
-  const scenarios = c().scenarios;
-
-  const cards = Object.values(scenarios)
-    .map((scenario) => {
-      const done = state.completed[scenario.id];
-      return `
-        <article class="card">
-          <span class="tag">${esc(scenario.label)}</span>
-          <h2>${esc(scenario.title)}</h2>
-          <p>${esc(scenario.subtitle)}</p>
-          ${done !== undefined ? `<span class="tag good">${ui.completed} · ${done}/50</span>` : ""}
-          <div class="btn-row">
-            <button class="primary" data-action="start-scenario" data-id="${scenario.id}">${ui.startScenario}</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-
-  return `
-    <p class="eyebrow">${ui.groupSelectEyebrow}</p>
-    <h1>${ui.groupSelectTitle}</h1>
-    <p class="lede">${ui.groupSelectLede}</p>
-
-    <div class="meta">
-      <span class="badge ${isPresenter ? "presenter" : ""}">${isPresenter ? ui.presenterMode : ui.playerMode}</span>
-      <span>2 × 5</span>
-    </div>
-
-    ${
-      isPresenter
-        ? ""
-        : `<div class="field" style="margin-bottom:1rem">
-            <label for="team-name">${ui.teamName} <span class="hint">${ui.optional}</span></label>
-            <input id="team-name" type="text" maxlength="40" value="${esc(state.team)}" placeholder="Team Resilience" />
-          </div>`
-    }
-
-    <div class="grid">${cards}</div>
-
     <div class="btn-row">
-      <button class="ghost" data-nav="home">${ui.backHome}</button>
-    </div>
-  `;
-}
-
-function contextView(context) {
-  const ui = c().ui;
-  if (context.type === "email") {
-    return `
-      <div class="scenario-context">
-        <div class="mail-head">
-          <div class="mail-avatar" aria-hidden="true">BL</div>
-          <div class="mail-meta">
-            <div><strong>${esc(context.from)}</strong></div>
-            <div class="mail-subject">${esc(context.subject)}</div>
-          </div>
-        </div>
-        <p class="mail-body">${esc(context.body)}</p>
-        ${context.link ? `<p class="mail-link">${esc(context.link)}</p>` : ""}
-        <span class="attachment">${esc(context.attachment)}</span>
-        ${context.footer ? `<p class="mail-body" style="margin-top:.9rem">${esc(context.footer)}</p>` : ""}
-      </div>
-    `;
-  }
-
-  return `
-    <div class="scenario-context">
-      <h3>${esc(context.title)}</h3>
-      <p class="mail-body">${esc(context.body)}</p>
-      <ul>${context.details.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>
-    </div>
-  `;
-}
-
-function metersView() {
-  const ui = c().ui;
-  return `
-    <div class="meters" aria-label="Game meters">
-      <div class="meter"><span>${ui.timeLeft}</span><strong>${state.meters.time}:00</strong></div>
-      <div class="meter"><span>${ui.donorTrust}</span><strong>${state.meters.trust}/100</strong></div>
-      <div class="meter"><span>${ui.containment}</span><strong>${state.meters.contain}/5</strong></div>
-    </div>
-  `;
-}
-
-function fakeLoginView() {
-  const ui = c().ui;
-  return `
-    <div class="fake-login" role="img" aria-label="${ui.simulation}">
-      <div class="fake-login-card">
-        <p class="eyebrow">${ui.simulation} · Banque de Luxembourg</p>
-        <h3>${ui.fakeLoginTitle}</h3>
-        <label>${ui.fakeLoginId}</label>
-        <input type="text" value="client@ngo.example" disabled />
-        <label>${ui.fakeLoginPassword}</label>
-        <input type="text" value="••••••••" disabled />
-        <button class="primary" type="button" disabled>${ui.fakeLoginButton}</button>
-        <p class="notice" style="margin-top:.9rem">${ui.fakeLoginNotice}</p>
-      </div>
+      <button class="ghost" data-action="go" data-path="demo">${sim.demoTitle}</button>
     </div>
   `;
 }
 
 function groupView() {
-  const ui = c().ui;
-  const scenario = c().scenarios[state.scenarioId];
-  const step = scenario.steps[state.step];
-  const total = scenario.steps.length;
-  const progress = Math.round((state.step / total) * 100);
-  const isPresenter = state.mode === "presenter";
+  const sim = c().sim;
+  const phishing = c().scenarios.phishing;
+  const laptop = c().scenarios.laptop;
+  return `
+    <p class="eyebrow">${sim.demoTitle}</p>
+    <h1>${c().ui.groupSelectTitle}</h1>
+    <p class="lede">${c().ui.groupSelectLede}</p>
 
-  const options = step.options
-    .map((option, index) => {
-      let cls = "option";
-      if (state.selected !== null) {
-        if (index === state.selected) {
-          cls += option.quality === "good" ? " correct" : option.quality === "partial" ? " selected" : " wrong";
-        }
-        if (option.quality === "good" && index !== state.selected) cls += " correct";
-      }
-      return `
-        <button class="${cls}" data-action="choose" data-index="${index}" ${state.selected !== null ? "disabled" : ""}>
-          <span class="letter">${String.fromCharCode(65 + index)}</span>
-          <span>${esc(option.text)}</span>
-        </button>
-      `;
-    })
-    .join("");
+    <div class="grid">
+      <article class="card">
+        <span class="tag">${sim.phishing}</span>
+        <h2>${esc(phishing.title)}</h2>
+        <p>${esc(phishing.subtitle)}</p>
+        <div class="btn-row">
+          <button class="primary" data-action="go" data-path="presenter/phishing">${sim.presenter}</button>
+          <button class="secondary" data-action="go" data-path="phishing">${sim.player}</button>
+        </div>
+      </article>
+      <article class="card">
+        <span class="tag">${sim.laptop}</span>
+        <h2>${esc(laptop.title)}</h2>
+        <p>${esc(laptop.subtitle)}</p>
+        <div class="btn-row">
+          <button class="primary" data-action="go" data-path="presenter/laptop">${sim.presenter}</button>
+          <button class="secondary" data-action="go" data-path="laptop">${sim.player}</button>
+        </div>
+      </article>
+    </div>
 
-  let feedback = "";
-  if (state.selected !== null) {
-    const option = step.options[state.selected];
-    const cls = option.quality === "good" ? "good" : option.quality === "partial" ? "partial" : "bad";
-    const label =
-      option.quality === "good" ? ui.correct : option.quality === "partial" ? ui.partlyRight : ui.notBest;
-    feedback = `
-      <div class="feedback ${cls}" role="status">
-        <strong>${label} · +${option.points} ${ui.points}</strong>
-        <p>${esc(option.feedback)}</p>
+    <div class="btn-row">
+      <button class="ghost" data-action="go" data-path="">${c().ui.backHome}</button>
+    </div>
+  `;
+}
+
+function demoView() {
+  const sim = c().sim;
+  const base = location.origin + location.pathname;
+  const rows = [
+    ["phishing", `${sim.phishing} — ${sim.player}`],
+    ["presenter/phishing", `${sim.phishing} — ${sim.presenter}`],
+    ["laptop", `${sim.laptop} — ${sim.player}`],
+    ["presenter/laptop", `${sim.laptop} — ${sim.presenter}`],
+    ["log", sim.log],
+  ];
+
+  return `
+    <p class="eyebrow">${sim.demoTitle}</p>
+    <h1>${sim.demoTitle}</h1>
+    <p class="lede">${sim.demoText}</p>
+
+    <div class="demo-list">
+      ${rows
+        .map(([path, label]) => {
+          const url = `${base}#/${path}`;
+          return `
+            <div class="demo-row">
+              <div class="demo-meta">
+                <strong>${esc(label)}</strong>
+                <code class="demo-url">${esc(url)}</code>
+              </div>
+              <button class="secondary copy-btn" data-action="copy" data-copy="${esc(url)}">${sim.copy}</button>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+
+    <div class="btn-row">
+      <button class="ghost" data-action="go" data-path="">${sim.backHome}</button>
+    </div>
+  `;
+}
+
+/* ---------- Scenario A ---------- */
+
+function inboxView() {
+  const sim = c().sim;
+  const ctx = c().scenarios.phishing.context;
+  return `
+    ${cueBlock("cueInbox")}
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.mail}</span>
+        <span class="app-sub">${sim.inbox}</span>
       </div>
-      ${state.showFakeLogin ? fakeLoginView() : ""}
-      <button class="primary" data-action="next">
-        ${state.step < total - 1 ? ui.nextStep : ui.seeResult}
-      </button>
-    `;
-  }
+      <div class="search-bar">${sim.search}</div>
+      <div class="mail-list">
+        <button class="mail-row unread" data-action="open-email">
+          <span class="avatar">BL</span>
+          <span class="mail-row-text">
+            <strong>${esc(ctx.from)}</strong>
+            <span>${esc(ctx.subject)}</span>
+            <span class="preview">${esc(ctx.body.slice(0, 64))}…</span>
+          </span>
+          <span class="mail-time">09:14</span>
+        </button>
+        <div class="mail-row">
+          <span class="avatar soft">NL</span>
+          <span class="mail-row-text">
+            <strong>${esc(sim.newsletter)}</strong>
+            <span>${esc(sim.newsletterSubject)}</span>
+            <span class="preview">Our monthly update…</span>
+          </span>
+          <span class="mail-time">08:02</span>
+        </div>
+        <div class="mail-row">
+          <span class="avatar soft">JD</span>
+          <span class="mail-row-text">
+            <strong>${esc(sim.colleagueName)}</strong>
+            <span>${esc(sim.colleagueSubject)}</span>
+            <span class="preview">Thanks, I will send the file…</span>
+          </span>
+          <span class="mail-time">Yesterday</span>
+        </div>
+      </div>
+    </div>
+    <p class="hint">${sim.tapEmail}</p>
+  `;
+}
+
+function emailView() {
+  const sim = c().sim;
+  const ctx = c().scenarios.phishing.context;
+  return `
+    ${cueBlock("cueEmail")}
+    <div class="phone-app">
+      <div class="app-bar">
+        <button class="icon-btn" data-action="screen" data-screen="inbox" aria-label="Back">‹</button>
+        <span class="app-title">${sim.mail}</span>
+      </div>
+      <div class="mail-detail-head">
+        <span class="avatar">BL</span>
+        <div>
+          <strong>${esc(ctx.from)}</strong>
+          <span>to me</span>
+        </div>
+      </div>
+      <h3>${esc(ctx.subject)}</h3>
+      <p>${esc(ctx.body)}</p>
+      <p class="mail-link">${esc(ctx.link)}</p>
+      <span class="attachment">${esc(ctx.attachment)}</span>
+      <div class="action-row">
+        <button class="primary" data-action="email-open">${sim.openInvoice}</button>
+        <button class="secondary" data-action="email-report">${sim.reportIt}</button>
+        <button class="ghost" data-action="email-delete">${sim.deleteIt}</button>
+      </div>
+    </div>
+  `;
+}
+
+function fakeLoginView() {
+  const sim = c().sim;
+  return `
+    ${cueBlock("cueFakeLogin")}
+    <div class="fake-login">
+      <div class="fake-login-card">
+        <p class="eyebrow">${sim.simulation || c().ui.simulation} · Banque de Luxembourg</p>
+        <h3>${c().ui.fakeLoginTitle}</h3>
+        <label>${c().ui.fakeLoginId}</label>
+        <input type="text" value="client@ngo.example" disabled />
+        <label>${c().ui.fakeLoginPassword}</label>
+        <input type="text" value="••••••••" disabled />
+        <button class="primary" type="button" disabled>${c().ui.fakeLoginButton}</button>
+        <p class="notice" style="margin-top:.9rem">${c().ui.fakeLoginNotice}</p>
+      </div>
+    </div>
+    <button class="primary" data-action="to-ransom">${sim.continue}</button>
+  `;
+}
+
+function reportedView() {
+  const sim = c().sim;
+  return `
+    <div class="feedback good">
+      <strong>${sim.reportedTitle}</strong>
+      <p>${sim.reportedBody}</p>
+    </div>
+    <button class="primary" data-action="to-contain">${sim.continue}</button>
+  `;
+}
+
+function deletedView() {
+  const sim = c().sim;
+  return `
+    <div class="feedback partial">
+      <strong>${sim.deletedTitle}</strong>
+      <p>${sim.deletedBody}</p>
+    </div>
+    <button class="primary" data-action="to-contain">${sim.continue}</button>
+  `;
+}
+
+function ransomView() {
+  const sim = c().sim;
+  return `
+    ${cueBlock("cueRansom")}
+    <div class="ransom-screen">
+      <div class="ransom-card">
+        <p class="eyebrow">⚠ ${sim.ransomTitle}</p>
+        <h2>${sim.ransomTitle}</h2>
+        <p>${sim.ransomBody}</p>
+        <div class="action-row">
+          <button class="primary danger" data-action="ransom" data-value="pay">${sim.ransomPay}</button>
+          <button class="secondary" data-action="ransom" data-value="disconnect">${sim.ransomDisconnect}</button>
+          <button class="ghost" data-action="ransom" data-value="restart">${sim.ransomRestart}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function ransomResultView() {
+  const sim = c().sim;
+  const map = {
+    pay: { text: sim.ransomPaid, cls: "bad" },
+    disconnect: { text: sim.ransomContained, cls: "good" },
+    restart: { text: sim.ransomRestarted, cls: "partial" },
+  };
+  const result = map[state.ransomAction] || map.pay;
+  return `
+    <div class="feedback ${result.cls}">
+      <strong>${state.ransomAction === "disconnect" ? sim.ransomDisconnect : state.ransomAction === "pay" ? sim.ransomPay : sim.ransomRestart}</strong>
+      <p>${result.text}</p>
+    </div>
+    <button class="primary" data-action="to-contain">${sim.continue}</button>
+  `;
+}
+
+function containView() {
+  const sim = c().sim;
+  const options = [
+    ["disconnect", sim.containDisconnect],
+    ["passwords", sim.containPasswords],
+    ["call", sim.containCall],
+  ];
+  return `
+    ${cueBlock("cueContain")}
+    <h1>${sim.containTitle}</h1>
+    <p class="lede">${sim.containBody}</p>
+    <div class="check-list">
+      ${options
+        .map(
+          ([value, label]) => `
+            <button class="check ${state.containActions.includes(value) ? "on" : ""}"
+              data-action="contain-toggle" data-value="${value}">
+              <span class="check-box">${state.containActions.includes(value) ? "✓" : ""}</span>
+              <span>${label}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+    ${state.containActions.length === 3 ? `<div class="feedback good"><p>${sim.containDone}</p></div>` : ""}
+    <button class="primary" data-action="to-contacts">${sim.continue}</button>
+  `;
+}
+
+function contactsView() {
+  const sim = c().sim;
+  const contacts = [
+    ["it", sim.contactIT, sim.contactITRole],
+    ["circl", sim.contactCIRCL, sim.contactCIRCLRole],
+    ["cnpd", sim.contactCNPD, sim.contactCNPDRole],
+    ["bank", sim.contactBank, sim.contactBankRole],
+    ["police", sim.contactPolice, sim.contactPoliceRole],
+    ["provider", sim.contactProvider, sim.contactProviderRole],
+  ];
+  return `
+    ${cueBlock("cueContacts")}
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.contactsTitle}</span>
+        <span class="app-sub">${sim.contactsSubtitle}</span>
+      </div>
+      <div class="contact-list">
+        ${contacts
+          .map(([id, name, role]) => {
+            const called = state.contacts.includes(id);
+            return `
+              <div class="contact-row">
+                <div class="contact-info">
+                  <span class="avatar soft">${initials(name)}</span>
+                  <div><strong>${esc(name)}</strong><span>${esc(role)}</span></div>
+                </div>
+                <button class="${called ? "secondary" : "primary"}" data-action="call-contact" data-id="${id}">
+                  ${called ? sim.called : sim.call}
+                </button>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+    ${state.contacts.length ? `<div class="feedback good"><p>${sim.contactsDone}</p></div>` : ""}
+    <button class="primary" data-action="to-log">${sim.continue}</button>
+  `;
+}
+
+function logFormView() {
+  const sim = c().sim;
+  return `
+    ${cueBlock("cueLog")}
+    <h1>${sim.logTitle}</h1>
+    <p class="lede">${sim.logSubtitle}</p>
+    <form id="scenario-log-form" novalidate>
+      ${logFields("scenario")}
+      <button class="primary" type="submit">${sim.saveLog}</button>
+    </form>
+  `;
+}
+
+function messageView() {
+  const sim = c().sim;
+  return `
+    ${cueBlock("cueMessage")}
+    <div class="chat-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.messageTitle}</span>
+        <span class="app-sub">${sim.messageSubtitle}</span>
+      </div>
+      <div class="chat-bubble">${sim.messageSubtitle}</div>
+      <textarea id="message-text" class="chat-input" maxlength="1200"
+        placeholder="${esc(sim.messagePlaceholder)}">${esc(state.message)}</textarea>
+      <div class="btn-row">
+        <button class="secondary" data-action="message-template">${sim.template}</button>
+        <button class="primary" data-action="send-message">${sim.sendMessage}</button>
+      </div>
+    </div>
+  `;
+}
+
+function debriefView() {
+  const sim = c().sim;
+  const ui = c().ui;
+  return `
+    <h1>${sim.debriefTitle}</h1>
+    <p class="lede">${sim.debriefBody}</p>
+
+    <div class="log-sheet">
+      <p class="eyebrow">${sim.logTitle}</p>
+      <dl>
+        <dt>${ui.nameLabel}</dt><dd>${esc(state.log.name) || "—"}</dd>
+        <dt>${ui.timeLabel}</dt><dd>${esc(state.log.time) || "—"}</dd>
+        <dt>${ui.descriptionLabel}</dt><dd>${esc(state.log.description) || "—"}</dd>
+        <dt>${ui.affectedLabel}</dt><dd>${esc(state.log.affected) || "—"}</dd>
+      </dl>
+    </div>
+
+    <div class="notice">
+      <strong>${sim.messageTitle}</strong>
+      <p>${esc(state.message) || "—"}</p>
+    </div>
+
+    <h2>${sim.takeawaysTitle}</h2>
+    <ul class="summary-list">
+      ${sim.takeaways.map((item) => `<li><span>${esc(item)}</span></li>`).join("")}
+    </ul>
+
+    <div class="btn-row">
+      <button class="primary" data-action="replay">${sim.replay}</button>
+      <button class="secondary" data-action="go" data-path="">${sim.backHome}</button>
+    </div>
+  `;
+}
+
+function deviceView() {
+  const sim = c().sim;
+  const ctx = c().scenarios.laptop.context;
+  return `
+    ${cueBlock("cueLaptop")}
+    <div class="file-app">
+      <div class="app-bar">
+        <span class="app-title">Files</span>
+        <span class="app-sub">${sim.laptopTitle}</span>
+      </div>
+      <p class="file-banner">${esc(sim.laptopBody)}</p>
+      <div class="file-list">
+        ${ctx.details
+          .map(
+            (item, index) => `
+              <div class="file-row">
+                <span class="file-icon">${index === 0 ? "📄" : index === 1 ? "📁" : "💻"}</span>
+                <span>${esc(item)}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      <div class="action-row">
+        <button class="primary" data-action="laptop" data-value="wipe">${sim.laptopWipe}</button>
+        <button class="secondary" data-action="laptop" data-value="passwords">${sim.laptopPasswords}</button>
+        <button class="secondary" data-action="laptop" data-value="report">${sim.laptopReport}</button>
+        <button class="ghost" data-action="laptop" data-value="wait">${sim.laptopWait}</button>
+      </div>
+    </div>
+  `;
+}
+
+function laptopResultView() {
+  const sim = c().sim;
+  const wait = state.laptopAction === "wait";
+  return `
+    ${cueBlock("cueLaptopData")}
+    <div class="feedback ${wait ? "bad" : "good"}">
+      <strong>${wait ? sim.laptopWait : sim.laptopWipe}</strong>
+      <p>${wait ? sim.laptopWaitResult : sim.laptopDone}</p>
+    </div>
+    <button class="primary" data-action="to-contacts-laptop">${sim.continue}</button>
+  `;
+}
+
+function scenarioView() {
+  const scenario = c().scenarios[state.scenarioId];
+  const screens = {
+    inbox: inboxView,
+    email: emailView,
+    fakeLogin: fakeLoginView,
+    reported: reportedView,
+    deleted: deletedView,
+    ransom: ransomView,
+    ransomResult: ransomResultView,
+    contain: containView,
+    contacts: contactsView,
+    log: logFormView,
+    message: messageView,
+    debrief: debriefView,
+    device: deviceView,
+    laptopResult: laptopResultView,
+  };
+  const view = screens[state.screen] || inboxView;
 
   return `
     <div class="meta">
-      <span class="badge ${isPresenter ? "presenter" : ""}">${isPresenter ? ui.presenterMode : ui.playerMode}</span>
+      ${modeBadge()}
       <span>${esc(scenario.label)} · ${esc(scenario.title)}</span>
-      ${state.team && !isPresenter ? `<span>${esc(state.team)}</span>` : ""}
     </div>
-
-    <p class="eyebrow">${t(ui.stepOf, { n: state.step + 1, total })}</p>
-    <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}">
-      <div style="width:${progress}%"></div>
-    </div>
-
-    ${contextView(scenario.context)}
-    ${metersView()}
-
-    <p class="prompt" id="prompt">${esc(step.prompt)}</p>
-    ${isPresenter && step.tip ? `<p class="tip"><strong>${ui.presenterTip}:</strong> ${esc(step.tip)}</p>` : ""}
-
-    <div class="options" role="group" aria-labelledby="prompt">${options}</div>
-
-    ${feedback}
-
+    ${view()}
     <div class="btn-row">
-      <button class="ghost" data-nav="group-select">${ui.leaveScenario}</button>
+      <button class="ghost" data-action="go" data-path="">${c().sim.backHome}</button>
     </div>
   `;
 }
 
-function groupEndView() {
-  const ui = c().ui;
-  const scenario = c().scenarios[state.scenarioId];
-  const max = scenario.steps.length * 10;
-  const pct = Math.round((state.score / max) * 100);
-  const done = Object.keys(state.completed).length;
-  const total = Object.values(state.completed).reduce((sum, value) => sum + value, 0);
-  const other = state.scenarioId === "phishing" ? "laptop" : "phishing";
-
-  const summary = scenario.steps
-    .map((step, index) => {
-      const answer = state.answers.find((item) => item.step === index);
-      const points = answer ? answer.points : 0;
-      return `<li><span>${esc(step.title)}</span><span class="pts">${points}/10</span></li>`;
-    })
-    .join("");
-
-  const message = pct >= 80 ? ui.percentStrong : pct >= 50 ? ui.percentGood : ui.percentNeeds;
-
-  return `
-    <p class="eyebrow">${esc(scenario.label)} · ${ui.completed}</p>
-    <h1>${ui.scenarioResult}</h1>
-    <p class="score-big">${state.score}<small> / ${max}</small></p>
-    <p class="lede">${pct}% — ${message}</p>
-
-    ${metersView()}
-
-    <h2>${ui.yourDecisions}</h2>
-    <ul class="summary-list">${summary}</ul>
-
-    ${
-      done === 2
-        ? `<div class="notice">${t(ui.totalBoth, { total })}</div>`
-        : `<div class="notice">${ui.backScenarios}</div>`
-    }
-
-    <div class="btn-row">
-      <button class="primary" data-action="start-scenario" data-id="${other}">${ui.playOther}</button>
-      <button class="secondary" data-nav="group-select">${ui.backScenarios}</button>
-      <button class="ghost" data-nav="home">${ui.navHome}</button>
-    </div>
-  `;
-}
-
-function individualView() {
-  const ui = c().ui;
-  const bank = c().bank;
-  return `
-    <p class="eyebrow">${ui.individualEyebrow}</p>
-    <h1>${ui.individualTitle}</h1>
-    <p class="lede">${ui.individualLede}</p>
-
-    <div class="bank-card">
-      <p class="eyebrow" style="margin-bottom:.2rem">${esc(bank.account)} — ${ui.statement}</p>
-      <div class="tx">
-        <span>${esc(bank.date)} ${esc(bank.time)}</span>
-        <span>${ui.payment}</span>
-        <strong>−${esc(bank.amount)}</strong>
-      </div>
-      <p><strong>${ui.recipient}:</strong> ${esc(bank.recipient)}</p>
-      <p><strong>${ui.status}:</strong> ${esc(bank.status)}</p>
-      <p class="warning">${esc(bank.note)}</p>
-    </div>
-
-    <div class="notice">${ui.beforeYouWrite}</div>
-
-    <form id="log-form" novalidate>
-      <div class="form-grid">
-        <div class="field">
-          <label for="log-name">${ui.nameLabel} <span class="hint">${ui.nameHint}</span></label>
-          <input id="log-name" name="name" type="text" autocomplete="name" maxlength="120"
-            value="${esc(state.individual.name)}" placeholder="${esc(ui.namePlaceholder)}" />
-        </div>
-
-        <div class="field">
-          <label for="log-time">${ui.timeLabel} <span class="hint">${ui.timeHint}</span></label>
-          <input id="log-time" name="time" type="text" maxlength="80"
-            value="${esc(state.individual.time)}" placeholder="${esc(ui.timePlaceholder)}" />
-        </div>
-
-        <div class="field">
-          <label for="log-description">${ui.descriptionLabel} <span class="hint">${ui.descriptionHint}</span></label>
-          <textarea id="log-description" name="description" maxlength="1200"
-            placeholder="${esc(ui.descriptionPlaceholder)}">${esc(state.individual.description)}</textarea>
-        </div>
-
-        <div class="field">
-          <label for="log-affected">${ui.affectedLabel} <span class="hint">${ui.affectedHint}</span></label>
-          <input id="log-affected" name="affected" type="text" maxlength="200"
-            value="${esc(state.individual.affected)}" placeholder="${esc(ui.affectedPlaceholder)}" />
-        </div>
-      </div>
-
-      <button class="primary" type="submit">${ui.submitLog}</button>
-    </form>
-
-    <div class="btn-row">
-      <button class="ghost" data-nav="home">${ui.backHome}</button>
-    </div>
-  `;
-}
+/* ---------- Challenge 4 ---------- */
 
 function evaluateLog(data) {
   const issues = [];
@@ -416,69 +702,104 @@ function evaluateLog(data) {
   return { score, issues, fields: { nameScore, timeScore, descScore, affScore } };
 }
 
-function individualFeedbackView() {
+function individualLogView() {
+  const sim = c().sim;
   const ui = c().ui;
   const bank = c().bank;
-  const data = state.individual;
-  const result = state.individualResult;
-  const pct = Math.round((result.score / 100) * 100);
-  const message = pct >= 80 ? ui.strongLog : pct >= 50 ? ui.goodStart : ui.needsWork;
 
-  const fieldRow = (label, score, max, good, partial) => {
-    const text = score === max ? good : score > 0 ? partial : ui.missing;
-    return `<li><span>${label}</span><span class="pts">${score}/${max} · ${text}</span></li>`;
-  };
+  if (state.logResult) {
+    const result = state.logResult;
+    const pct = Math.round((result.score / 100) * 100);
+    const message = pct >= 80 ? ui.strongLog : pct >= 50 ? ui.goodStart : ui.needsWork;
+
+    const fieldRow = (label, score, max, good, partial) => {
+      const text = score === max ? good : score > 0 ? partial : ui.missing;
+      return `<li><span>${label}</span><span class="pts">${score}/${max} · ${text}</span></li>`;
+    };
+
+    return `
+      <p class="eyebrow">${ui.resultEyebrow}</p>
+      <h1>${ui.yourLogSheet}</h1>
+      <p class="score-big">${result.score}<small> / 100</small></p>
+      <p class="lede">${message}</p>
+
+      <h2>${ui.fieldCheck}</h2>
+      <ul class="summary-list">
+        ${fieldRow(ui.nameLabel, result.fields.nameScore, 20, ui.complete, ui.tooShort)}
+        ${fieldRow(ui.timeLabel, result.fields.timeScore, 20, ui.complete, ui.addDate)}
+        ${fieldRow(ui.descriptionLabel, result.fields.descScore, 40, ui.complete, ui.addFacts)}
+        ${fieldRow(ui.affectedLabel, result.fields.affScore, 20, ui.complete, ui.beSpecific)}
+      </ul>
+
+      ${
+        result.issues.length
+          ? `<div class="feedback partial"><strong>${ui.toImprove}</strong>${result.issues
+              .map(
+                (issue) =>
+                  `<p><strong>${esc(ui[`${issue.field}Label`])}:</strong> ${esc(ui[issue.key])}</p>`
+              )
+              .join("")}</div>`
+          : `<div class="feedback good">${ui.allComplete}</div>`
+      }
+
+      <section id="print-area" class="log-sheet">
+        <p class="eyebrow">${ui.printEyebrow}</p>
+        <h2>${ui.individualTitle}</h2>
+        <dl>
+          <dt>${ui.nameLabel}</dt><dd>${esc(state.log.name) || "—"}</dd>
+          <dt>${ui.timeLabel}</dt><dd>${esc(state.log.time) || "—"}</dd>
+          <dt>${ui.descriptionLabel}</dt><dd>${esc(state.log.description) || "—"}</dd>
+          <dt>${ui.affectedLabel}</dt><dd>${esc(state.log.affected) || "—"}</dd>
+        </dl>
+        <p class="hint" style="margin-top:1rem">${esc(bank.account)} · ${esc(bank.date)} · ${esc(bank.amount)} · ${esc(bank.recipient)}</p>
+      </section>
+
+      <div class="model">
+        <h3>${ui.modelAnswer}</h3>
+        <p><strong>${ui.nameLabel}:</strong> ${esc(c().model.name)}</p>
+        <p><strong>${ui.timeLabel}:</strong> ${esc(c().model.time)}</p>
+        <p><strong>${ui.descriptionLabel}:</strong> ${esc(c().model.description)}</p>
+        <p><strong>${ui.affectedLabel}:</strong> ${esc(c().model.affected)}</p>
+      </div>
+
+      <div class="btn-row no-print">
+        <button class="primary" data-action="print">${ui.print}</button>
+        <button class="secondary" data-action="retry-log">${ui.tryAgain}</button>
+        <button class="ghost" data-action="go" data-path="">${sim.backHome}</button>
+      </div>
+    `;
+  }
 
   return `
-    <p class="eyebrow">${ui.resultEyebrow}</p>
-    <h1>${ui.yourLogSheet}</h1>
-    <p class="score-big">${result.score}<small> / 100</small></p>
-    <p class="lede">${message}</p>
+    <p class="eyebrow">${sim.log}</p>
+    <h1>${ui.individualTitle}</h1>
+    <p class="lede">${ui.individualLede}</p>
 
-    <h2>${ui.fieldCheck}</h2>
-    <ul class="summary-list">
-      ${fieldRow(ui.nameLabel, result.fields.nameScore, 20, ui.complete, ui.tooShort)}
-      ${fieldRow(ui.timeLabel, result.fields.timeScore, 20, ui.complete, ui.addDate)}
-      ${fieldRow(ui.descriptionLabel, result.fields.descScore, 40, ui.complete, ui.addFacts)}
-      ${fieldRow(ui.affectedLabel, result.fields.affScore, 20, ui.complete, ui.beSpecific)}
-    </ul>
-
-    ${
-      result.issues.length
-        ? `<div class="feedback partial"><strong>${ui.toImprove}</strong>${result.issues
-            .map(
-              (issue) =>
-                `<p><strong>${esc(ui[`${issue.field}Label`])}:</strong> ${esc(ui[issue.key])}</p>`
-            )
-            .join("")}</div>`
-        : `<div class="feedback good">${ui.allComplete}</div>`
-    }
-
-    <section id="print-area" class="log-sheet">
-      <p class="eyebrow">${ui.printEyebrow}</p>
-      <h2>${ui.individualTitle}</h2>
-      <dl>
-        <dt>${ui.nameLabel}</dt><dd>${esc(data.name) || "—"}</dd>
-        <dt>${ui.timeLabel}</dt><dd>${esc(data.time) || "—"}</dd>
-        <dt>${ui.descriptionLabel}</dt><dd>${esc(data.description) || "—"}</dd>
-        <dt>${ui.affectedLabel}</dt><dd>${esc(data.affected) || "—"}</dd>
-      </dl>
-      <p class="hint" style="margin-top:1rem">${esc(bank.account)} · ${esc(bank.date)} · ${esc(bank.amount)} · ${esc(bank.recipient)}</p>
-    </section>
-
-    <div class="model">
-      <h3>${ui.modelAnswer}</h3>
-      <p><strong>${ui.nameLabel}:</strong> ${esc(c().model.name)}</p>
-      <p><strong>${ui.timeLabel}:</strong> ${esc(c().model.time)}</p>
-      <p><strong>${ui.descriptionLabel}:</strong> ${esc(c().model.description)}</p>
-      <p><strong>${ui.affectedLabel}:</strong> ${esc(c().model.affected)}</p>
+    <div class="phone-app bank-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.bankTitle}</span>
+        <span class="app-sub">${sim.bankAccount}</span>
+      </div>
+      <div class="balance">
+        <span>${sim.bankBalance}</span>
+        <strong>€12,340.00</strong>
+      </div>
+      <div class="tx-row danger">
+        <span>${esc(bank.date)} ${esc(bank.time)}</span>
+        <span>${sim.bankTransaction}</span>
+        <strong>−${esc(bank.amount)}</strong>
+      </div>
+      <p><strong>${ui.recipient}:</strong> ${esc(bank.recipient)}</p>
+      <p><strong>${ui.status}:</strong> ${esc(bank.status)}</p>
+      <p class="warning">${esc(sim.bankWarning)}</p>
     </div>
 
-    <div class="btn-row no-print">
-      <button class="primary" data-action="print">${ui.print}</button>
-      <button class="secondary" data-action="retry-individual">${ui.tryAgain}</button>
-      <button class="ghost" data-nav="home">${ui.navHome}</button>
-    </div>
+    <div class="notice">${ui.beforeYouWrite}</div>
+
+    <form id="individual-log-form" novalidate>
+      ${logFields("individual")}
+      <button class="primary" type="submit">${ui.submitLog}</button>
+    </form>
   `;
 }
 
@@ -486,97 +807,33 @@ function individualFeedbackView() {
 
 function render() {
   const app = $("#app");
-  const views = {
-    home: homeView,
-    "group-select": groupSelectView,
-    group: groupView,
-    "group-end": groupEndView,
-    individual: individualView,
-    "individual-feedback": individualFeedbackView,
-  };
+  const route = readRoute();
+
+  if (route.name === "scenario") {
+    const key = `${route.mode}:${route.id}`;
+    if (key !== routeKey) {
+      resetScenario(route.id, route.mode);
+      routeKey = key;
+    }
+  } else {
+    if (route.name === "log" && routeKey !== "log") resetLog();
+    routeKey = route.name;
+  }
 
   syncChrome();
-  const view = views[state.screen] || homeView;
-  app.innerHTML = view();
+
+  if (route.name === "home") app.innerHTML = homeView();
+  else if (route.name === "group") app.innerHTML = groupView();
+  else if (route.name === "demo") app.innerHTML = demoView();
+  else if (route.name === "log") app.innerHTML = individualLogView();
+  else app.innerHTML = scenarioView();
+
   document.body.classList.toggle(
     "presenter",
-    state.mode === "presenter" && (state.screen === "group" || state.screen === "group-end")
+    route.name === "scenario" && state.mode === "presenter"
   );
   app.focus({ preventScroll: true });
-
-  if (scrollOnRender) {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    scrollOnRender = false;
-  }
-}
-
-/* ---------- Actions ---------- */
-
-function startScenario(id) {
-  const teamInput = $("#team-name");
-  if (teamInput) state.team = teamInput.value.trim();
-
-  state.scenarioId = id;
-  state.step = 0;
-  state.score = 0;
-  state.selected = null;
-  state.answers = [];
-  state.showFakeLogin = false;
-  state.meters = { time: 60, trust: 50, contain: 0 };
-  state.screen = "group";
-  scrollOnRender = true;
-  render();
-}
-
-function choose(index) {
-  if (state.selected !== null) return;
-  const scenario = c().scenarios[state.scenarioId];
-  const step = scenario.steps[state.step];
-  const option = step.options[index];
-  if (!option) return;
-
-  state.selected = index;
-  state.score += option.points;
-  state.meters.time = Math.max(0, state.meters.time + (option.effect?.time ?? 0));
-  state.meters.trust = Math.max(0, Math.min(100, state.meters.trust + (option.effect?.trust ?? 0)));
-  state.meters.contain = Math.max(0, Math.min(5, state.meters.contain + (option.effect?.contain ?? 0)));
-  state.answers.push({ step: state.step, optionIndex: index, points: option.points });
-
-  // Scenario A, step 1, "click the link": show the fake bank login imitation.
-  state.showFakeLogin = state.scenarioId === "phishing" && state.step === 0 && index === 0;
-
-  render();
-}
-
-function nextStep() {
-  const scenario = c().scenarios[state.scenarioId];
-  if (state.step < scenario.steps.length - 1) {
-    state.step += 1;
-    state.selected = null;
-    state.showFakeLogin = false;
-    scrollOnRender = true;
-    render();
-  } else {
-    state.completed[state.scenarioId] = state.score;
-    state.screen = "group-end";
-    state.showFakeLogin = false;
-    scrollOnRender = true;
-    render();
-  }
-}
-
-function submitLog() {
-  const data = {
-    name: $("#log-name").value,
-    time: $("#log-time").value,
-    description: $("#log-description").value,
-    affected: $("#log-affected").value,
-  };
-  state.individual = data;
-  state.individualResult = evaluateLog(data);
-  state.screen = "individual-feedback";
-  scrollOnRender = true;
-  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* ---------- Events ---------- */
@@ -585,10 +842,7 @@ document.addEventListener("click", (event) => {
   const nav = event.target.closest("[data-nav]");
   if (nav) {
     event.preventDefault();
-    state.screen = nav.dataset.nav;
-    if (state.screen === "group-select" && !state.mode) state.mode = "player";
-    scrollOnRender = true;
-    render();
+    navigate(nav.dataset.nav === "home" ? "" : nav.dataset.nav);
     return;
   }
 
@@ -596,45 +850,111 @@ document.addEventListener("click", (event) => {
   if (!button) return;
 
   const action = button.dataset.action;
-  if (action === "start-group") {
-    state.mode = button.dataset.mode || "player";
-    state.screen = "group-select";
-    scrollOnRender = true;
-    render();
-  } else if (action === "start-scenario") {
-    startScenario(button.dataset.id);
-  } else if (action === "choose") {
-    choose(Number(button.dataset.index));
-  } else if (action === "next") {
-    nextStep();
-  } else if (action === "start-individual") {
-    state.screen = "individual";
-    scrollOnRender = true;
-    render();
-  } else if (action === "print") {
-    window.print();
-  } else if (action === "retry-individual") {
-    state.individual = { name: "", time: "", description: "", affected: "" };
-    state.individualResult = null;
-    state.screen = "individual";
-    scrollOnRender = true;
-    render();
+
+  if (action === "go") {
+    navigate(button.dataset.path || "");
   } else if (action === "lang") {
     const next = button.dataset.lang;
     if (CONTENT[next]) {
       lang = next;
       localStorage.setItem("ngogame.lang", lang);
-      syncChrome();
       render();
     }
+  } else if (action === "copy") {
+    const text = button.dataset.copy || "";
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        const old = button.textContent;
+        button.textContent = c().sim.copy;
+        setTimeout(() => {
+          button.textContent = old;
+        }, 1200);
+      });
+    }
+  } else if (action === "screen") {
+    state.screen = button.dataset.screen;
+    render();
+  } else if (action === "open-email") {
+    state.screen = "email";
+    render();
+  } else if (action === "email-open") {
+    state.screen = "fakeLogin";
+    render();
+  } else if (action === "email-report") {
+    state.screen = "reported";
+    render();
+  } else if (action === "email-delete") {
+    state.screen = "deleted";
+    render();
+  } else if (action === "to-ransom") {
+    state.screen = "ransom";
+    render();
+  } else if (action === "to-contain") {
+    state.screen = "contain";
+    render();
+  } else if (action === "ransom") {
+    state.ransomAction = button.dataset.value;
+    state.screen = "ransomResult";
+    render();
+  } else if (action === "contain-toggle") {
+    const value = button.dataset.value;
+    state.containActions = state.containActions.includes(value)
+      ? state.containActions.filter((item) => item !== value)
+      : [...state.containActions, value];
+    render();
+  } else if (action === "to-contacts") {
+    state.screen = "contacts";
+    render();
+  } else if (action === "call-contact") {
+    const id = button.dataset.id;
+    state.contacts = state.contacts.includes(id)
+      ? state.contacts.filter((item) => item !== id)
+      : [...state.contacts, id];
+    render();
+  } else if (action === "to-log") {
+    state.screen = "log";
+    render();
+  } else if (action === "message-template") {
+    const field = $("#message-text");
+    if (field) field.value = c().sim.templateText;
+  } else if (action === "send-message") {
+    state.message = $("#message-text")?.value || "";
+    state.screen = "debrief";
+    render();
+  } else if (action === "replay") {
+    resetScenario(state.scenarioId, state.mode);
+    render();
+  } else if (action === "laptop") {
+    state.laptopAction = button.dataset.value;
+    state.screen = "laptopResult";
+    render();
+  } else if (action === "to-contacts-laptop") {
+    state.screen = "contacts";
+    render();
+  } else if (action === "print") {
+    window.print();
+  } else if (action === "retry-log") {
+    resetLog();
+    render();
   }
 });
 
 document.addEventListener("submit", (event) => {
-  if (event.target.id === "log-form") {
+  if (event.target.id === "scenario-log-form") {
     event.preventDefault();
-    submitLog();
+    state.log = readLog("scenario");
+    state.screen = "message";
+    render();
+  }
+
+  if (event.target.id === "individual-log-form") {
+    event.preventDefault();
+    state.log = readLog("individual");
+    state.logResult = evaluateLog(state.log);
+    render();
   }
 });
+
+window.addEventListener("hashchange", render);
 
 render();
