@@ -1093,3 +1093,20 @@ button.danger:hover { background: #991b1b; }
   .desk-hud { flex-direction: column; align-items: stretch; }
   .desk-score { text-align: center; }
 }
+
+/* Presenter mode: bigger desk for the projected screen */
+body.presenter main,
+body.presenter .topbar,
+body.presenter .footer { max-width: 980px; }
+
+body.presenter .os-icon { font-size: 0.85rem; padding: 0.8rem 0.4rem; }
+body.presenter .os-glyph { font-size: 1.8rem; }
+body.presenter .desk-paper,
+body.presenter .desk-phone,
+body.presenter .desk-log,
+body.presenter .desk-sticky { font-size: 0.95rem; }
+
+@media (min-width: 800px) {
+  body.presenter .desk-surface { grid-template-columns: repeat(3, 1fr); }
+  body.presenter .desk-modal { max-width: 760px; }
+}
