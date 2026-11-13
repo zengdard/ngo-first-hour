@@ -759,6 +759,10 @@ function deskView() {
               ${osIcon("notes", "📝", sim.notes)}
               ${osIcon("log", "📋", sim.incidentLog)}
               ${osIcon("messages", "💬", sim.messages)}
+              <button class="os-icon" data-action="desk-action" data-id="disconnect">
+                <span class="os-glyph">🔌</span>
+                <span>${esc(sim.containDisconnect)}</span>
+              </button>
             </div>
           </div>
           <div class="laptop-base"></div>
@@ -813,6 +817,7 @@ function deskModalView() {
     deleted: deskDeletedModal,
     ransom: deskRansomModal,
     ransomResult: deskRansomResultModal,
+    contained: deskContainedModal,
     phone: deskPhoneModal,
     files: deskFilesModal,
     document: deskDocumentModal,
@@ -976,6 +981,17 @@ function deskRansomResultModal() {
     <div class="feedback ${cls}">
       <strong>${flags.pay ? sim.ransomPay : flags.disconnect ? sim.ransomDisconnect : sim.ransomRestart}</strong>
       <p>${text}</p>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskContainedModal() {
+  const sim = c().sim;
+  return `
+    <div class="feedback good">
+      <strong>${sim.containDisconnect}</strong>
+      <p>${sim.ransomContained}</p>
     </div>
     <button class="secondary" data-action="desk-close">${sim.close}</button>
   `;
@@ -1449,8 +1465,9 @@ document.addEventListener("click", (event) => {
       else if (id === "report_email") state.desk.modal = "reported";
       else if (id === "click_link") state.desk.modal = "fakeLogin";
       else if (id === "delete_email") state.desk.modal = "deleted";
-      else if (id === "disconnect" || id === "pay_ransom" || id === "restart")
-        state.desk.modal = "ransomResult";
+      else if (id === "disconnect")
+        state.desk.modal = state.desk.modal === "ransom" ? "ransomResult" : "contained";
+      else if (id === "pay_ransom" || id === "restart") state.desk.modal = "ransomResult";
       else if (id.startsWith("call_")) state.desk.modal = "phone";
     }
     render();
