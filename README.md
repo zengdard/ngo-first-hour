@@ -6,6 +6,7 @@ A phone-first, bilingual (EN/FR) incident-response game for NGO training.
 - **Individual game:** fraudulent bank transaction, with a four-field log sheet
   (name, time, description, affected).
 - **Presenter mode** and **player mode** share the same content.
+- Scenario A includes a **fake bank login screen imitation**, shown only after a wrong click, to make the consequence tangible.
 - **No account, no backend, no data stored.** Everything runs in the browser.
 
 ## Local preview
