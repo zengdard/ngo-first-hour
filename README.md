@@ -3,10 +3,12 @@
 A phone-first, bilingual (EN/FR) incident-response game for NGO training.
 
 - **Group game:** two scenarios — clicked phishing link, stolen laptop.
+- **Scenario A is a point-and-click desk:** laptop, clickable papers, phone, incident log. **Scenario B** is a stolen-device/files screen.
 - **Individual game:** fraudulent bank transaction, with a four-field log sheet
   (name, time, description, affected).
 - **Presenter mode** and **player mode** share the same content.
 - **No questionnaire:** the app shows simulations of familiar app screens (mail, bank login, phone, messages); the presenter asks the questions and the room decides orally.
+- **Score & control:** a decision tree scores recognition, containment, calls, record and communication, then shows the path and the missed branches.
 - Scenario A includes a **fake bank login screen imitation**, shown only after a wrong click, to make the consequence tangible.
 - **No account, no backend, no data stored.** Everything runs in the browser.
 
@@ -83,6 +85,24 @@ Caddyfile
 
 The log sheet is printable from the individual game result screen
 (“Print / save as PDF”).
+
+## GitHub Actions
+
+- **CI** (`.github/workflows/ci.yml`): checks the JavaScript and builds the Docker image.
+- **Deploy** (`.github/workflows/deploy.yml`): on push to `main`, SSH to the VPS, pulls the repo and runs `docker compose up -d --build`.
+
+Secrets to add in GitHub → Settings → Secrets and variables → Actions:
+
+| Secret | Example |
+|---|---|
+| `VPS_HOST` | `203.0.113.10` |
+| `VPS_USER` | `deploy` |
+| `VPS_SSH_KEY` | private key with access to the VPS |
+| `VPS_PORT` | `22` (optional) |
+| `VPS_APP_DIR` | `/opt/ngo-first-hour` |
+| `GAME_DOMAIN` | `game.yourdomain.org` |
+
+The VPS must have the repository cloned at `VPS_APP_DIR`, with Docker and Compose installed.
 
 ## Data
 

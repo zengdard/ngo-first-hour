@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript
+        run: |
+          node --check public/app.js
+          node --check public/content.js
+      - name: Build the Docker image
+        run: docker build -t ngo-first-hour:ci .

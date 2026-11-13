@@ -30,7 +30,36 @@ const state = {
   log: { name: "", time: "", description: "", affected: "" },
   message: "",
   logResult: null,
+  desk: {
+    modal: null,
+    doc: null,
+    done: [],
+    flags: {},
+    path: [],
+    error: null,
+  },
 };
+
+const DESK_ACTIONS = {
+  open_mail: { points: 10, flag: "mail", label: "mail" },
+  open_email: { points: 10, flag: "email", label: "openEmail" },
+  report_email: { points: 10, flag: "reported", label: "reportIt" },
+  click_link: { points: -15, flag: "clicked", label: "openInvoice" },
+  delete_email: { points: -5, flag: "deleted", label: "deleteIt" },
+  disconnect: { points: 10, flag: "disconnect", label: "containDisconnect" },
+  pay_ransom: { points: -20, flag: "pay", label: "ransomPay" },
+  restart: { points: -10, flag: "restart", label: "ransomRestart" },
+  call_it: { points: 10, flag: "call_it", label: "contactIT" },
+  call_circl: { points: 10, flag: "call_circl", label: "contactCIRCL" },
+  call_cnpd: { points: 5, flag: "call_cnpd", label: "contactCNPD" },
+  call_bank: { points: 5, flag: "call_bank", label: "contactBank" },
+  call_police: { points: 5, flag: "call_police", label: "contactPolice" },
+  log: { points: 20, flag: "log", label: "saveLog" },
+  message: { points: 20, flag: "message", label: "sendMessage" },
+  false_message: { points: -10, flag: "false_message", label: "falseMessage" },
+};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 let routeKey = null;
 
@@ -66,7 +95,7 @@ function navigate(path = "") {
 function resetScenario(id, mode) {
   state.scenarioId = id;
   state.mode = mode;
-  state.screen = id === "phishing" ? "inbox" : "device";
+  state.screen = id === "phishing" ? "desk" : "device";
   state.ransomAction = null;
   state.laptopAction = null;
   state.containActions = [];
@@ -74,6 +103,7 @@ function resetScenario(id, mode) {
   state.log = { name: "", time: "", description: "", affected: "" };
   state.message = "";
   state.logResult = null;
+  state.desk = { modal: null, doc: null, done: [], flags: {}, path: [], error: null };
 }
 
 function resetLog() {
@@ -640,9 +670,534 @@ function laptopResultView() {
   `;
 }
 
+
+/* ---------- Challenge 3: point-and-click desk ---------- */
+
+function has(id) {
+  return state.desk.done.includes(id);
+}
+
+function doAction(id) {
+  const action = DESK_ACTIONS[id];
+  if (!action || has(id)) return false;
+  state.desk.done.push(id);
+  state.desk.flags[action.flag] = true;
+  state.desk.path.push({
+    id,
+    label: c().sim[action.label] || id,
+    points: action.points,
+  });
+  return true;
+}
+
+function computeScore() {
+  const flags = state.desk.flags;
+  const recognition = (flags.mail ? 10 : 0) + (flags.email ? 10 : 0);
+
+  let contain = (flags.reported ? 10 : 0) + (flags.disconnect ? 10 : 0);
+  if (flags.pay) contain -= 20;
+  if (flags.restart) contain -= 10;
+  contain = clamp(contain, 0, 20);
+
+  let calls =
+    (flags.call_it ? 10 : 0) +
+    (flags.call_circl ? 10 : 0) +
+    (flags.call_cnpd ? 5 : 0) +
+    (flags.call_bank ? 5 : 0) +
+    (flags.call_police ? 5 : 0);
+  calls = clamp(calls, 0, 20);
+
+  const record = flags.log ? 20 : 0;
+
+  let communicate = flags.message ? 20 : 0;
+  if (flags.false_message) communicate -= 10;
+  communicate = clamp(communicate, 0, 20);
+
+  let penalties = 0;
+  if (flags.clicked) penalties -= 15;
+  if (flags.deleted) penalties -= 5;
+
+  const total = clamp(recognition + contain + calls + record + communicate + penalties, 0, 100);
+  return { recognition, contain, calls, record, communicate, penalties, total };
+}
+
+function osIcon(target, icon, label) {
+  return `
+    <button class="os-icon" data-action="desk-open" data-target="${target}">
+      <span class="os-glyph">${icon}</span>
+      <span>${esc(label)}</span>
+    </button>
+  `;
+}
+
+function deskView() {
+  const sim = c().sim;
+  const score = computeScore();
+  const steps = [
+    [sim.recognition, score.recognition, 20, has("open_mail") && has("open_email")],
+    [sim.contain, score.contain, 20, has("disconnect") || has("report_email")],
+    [sim.calls, score.calls, 20, has("call_it") && has("call_circl")],
+    [sim.record, score.record, 20, has("log")],
+    [sim.communicate, score.communicate, 20, has("message")],
+  ];
+
+  return `
+    ${cueBlock("cueDesk")}
+    <p class="hint">${sim.deskHint}</p>
+
+    <div class="desk">
+      <div class="desk-wall">
+        <span class="desk-clock">09:14</span>
+        <span class="desk-poster">“If in doubt, report it.”</span>
+      </div>
+      <div class="desk-surface">
+        <div class="laptop">
+          <div class="laptop-screen">
+            <div class="os-grid">
+              ${osIcon("mail", "✉️", sim.mail)}
+              ${osIcon("files", "📁", sim.files)}
+              ${osIcon("notes", "📝", sim.notes)}
+              ${osIcon("log", "📋", sim.incidentLog)}
+              ${osIcon("messages", "💬", sim.messages)}
+            </div>
+          </div>
+          <div class="laptop-base"></div>
+          <span class="desk-label">${sim.laptop}</span>
+        </div>
+
+        <button class="desk-paper" data-action="desk-open" data-target="beneficiaries">
+          <span class="paper-icon">📄</span>
+          <span>${sim.beneficiaries}</span>
+        </button>
+        <button class="desk-paper finance" data-action="desk-open" data-target="finance">
+          <span class="paper-icon">📁</span>
+          <span>${sim.finance}</span>
+        </button>
+        <button class="desk-phone" data-action="desk-open" data-target="phone">
+          <span class="phone-glyph">📱</span>
+          <span>${sim.phone}</span>
+        </button>
+        <button class="desk-sticky" data-action="desk-open" data-target="note">
+          9:14<br />weird email
+        </button>
+        <button class="desk-log" data-action="desk-open" data-target="log">
+          <span>📋</span>
+          <span>${sim.incidentLog}</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="desk-hud">
+      <div class="desk-steps">
+        ${steps
+          .map(
+            ([label, value, max, done]) =>
+              `<span class="desk-step ${done ? "done" : ""}">${done ? "✓" : "○"} ${esc(label)} ${value}/${max}</span>`
+          )
+          .join("")}
+      </div>
+      <div class="desk-score">${sim.score}: <strong>${score.total}</strong></div>
+      <button class="secondary" data-action="desk-open" data-target="debrief">${sim.control}</button>
+    </div>
+
+    ${state.desk.modal ? deskModalView() : ""}
+  `;
+}
+
+function deskModalView() {
+  const views = {
+    mail: deskMailModal,
+    email: deskEmailModal,
+    fakeLogin: deskFakeLoginModal,
+    reported: deskReportedModal,
+    deleted: deskDeletedModal,
+    ransom: deskRansomModal,
+    ransomResult: deskRansomResultModal,
+    phone: deskPhoneModal,
+    files: deskFilesModal,
+    document: deskDocumentModal,
+    note: deskNoteModal,
+    notes: deskNoteModal,
+    log: deskLogModal,
+    message: deskMessageModal,
+    messages: deskMessageModal,
+    debrief: deskDebriefModal,
+  };
+  const view = views[state.desk.modal];
+  if (!view) return "";
+  return `
+    <div class="desk-modal-backdrop" data-action="desk-close">
+      <div class="desk-modal" role="dialog" aria-modal="true">
+        <button class="desk-modal-close" data-action="desk-close" aria-label="${c().sim.close}">×</button>
+        ${view()}
+      </div>
+    </div>
+  `;
+}
+
+function deskMailModal() {
+  const sim = c().sim;
+  const ctx = c().scenarios.phishing.context;
+  return `
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.mail}</span>
+        <span class="app-sub">${sim.inbox}</span>
+      </div>
+      <div class="search-bar">${sim.search}</div>
+      <div class="mail-list">
+        <button class="mail-row unread" data-action="desk-action" data-id="open_email">
+          <span class="avatar">BL</span>
+          <span class="mail-row-text">
+            <strong>${esc(ctx.from)}</strong>
+            <span>${esc(ctx.subject)}</span>
+            <span class="preview">${esc(ctx.body.slice(0, 64))}…</span>
+          </span>
+          <span class="mail-time">09:14</span>
+        </button>
+        <div class="mail-row">
+          <span class="avatar soft">NL</span>
+          <span class="mail-row-text">
+            <strong>${esc(sim.newsletter)}</strong>
+            <span>${esc(sim.newsletterSubject)}</span>
+            <span class="preview">Our monthly update…</span>
+          </span>
+          <span class="mail-time">08:02</span>
+        </div>
+        <div class="mail-row">
+          <span class="avatar soft">JD</span>
+          <span class="mail-row-text">
+            <strong>${esc(sim.colleagueName)}</strong>
+            <span>${esc(sim.colleagueSubject)}</span>
+            <span class="preview">Thanks, I will send the file…</span>
+          </span>
+          <span class="mail-time">Yesterday</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function deskEmailModal() {
+  const sim = c().sim;
+  const ctx = c().scenarios.phishing.context;
+  return `
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.mail}</span>
+        <span class="app-sub">${sim.openEmail}</span>
+      </div>
+      <div class="mail-detail-head">
+        <span class="avatar">BL</span>
+        <div>
+          <strong>${esc(ctx.from)}</strong>
+          <span>to me</span>
+        </div>
+      </div>
+      <h3>${esc(ctx.subject)}</h3>
+      <p>${esc(ctx.body)}</p>
+      <p class="mail-link">${esc(ctx.link)}</p>
+      <span class="attachment">${esc(ctx.attachment)}</span>
+      <div class="action-row">
+        <button class="primary" data-action="desk-action" data-id="click_link">${sim.openInvoice}</button>
+        <button class="secondary" data-action="desk-action" data-id="report_email">${sim.reportIt}</button>
+        <button class="ghost" data-action="desk-action" data-id="delete_email">${sim.deleteIt}</button>
+      </div>
+    </div>
+  `;
+}
+
+function deskFakeLoginModal() {
+  const sim = c().sim;
+  const ui = c().ui;
+  return `
+    <div class="fake-login">
+      <div class="fake-login-card">
+        <p class="eyebrow">${ui.simulation} · Banque de Luxembourg</p>
+        <h3>${ui.fakeLoginTitle}</h3>
+        <label>${ui.fakeLoginId}</label>
+        <input type="text" value="client@ngo.example" disabled />
+        <label>${ui.fakeLoginPassword}</label>
+        <input type="text" value="••••••••" disabled />
+        <button class="primary" type="button" disabled>${ui.fakeLoginButton}</button>
+        <p class="notice" style="margin-top:.9rem">${ui.fakeLoginNotice}</p>
+      </div>
+    </div>
+    <button class="primary" data-action="desk-open" data-target="ransom">${sim.continue}</button>
+  `;
+}
+
+function deskReportedModal() {
+  const sim = c().sim;
+  return `
+    <div class="feedback good">
+      <strong>${sim.reportedTitle}</strong>
+      <p>${sim.reportedBody}</p>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskDeletedModal() {
+  const sim = c().sim;
+  return `
+    <div class="feedback partial">
+      <strong>${sim.deletedTitle}</strong>
+      <p>${sim.deletedBody}</p>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskRansomModal() {
+  const sim = c().sim;
+  return `
+    <div class="ransom-screen">
+      <div class="ransom-card">
+        <p class="eyebrow">⚠ ${sim.ransomTitle}</p>
+        <h2>${sim.ransomTitle}</h2>
+        <p>${sim.ransomBody}</p>
+        <div class="action-row">
+          <button class="primary danger" data-action="desk-action" data-id="pay_ransom">${sim.ransomPay}</button>
+          <button class="secondary" data-action="desk-action" data-id="disconnect">${sim.ransomDisconnect}</button>
+          <button class="ghost" data-action="desk-action" data-id="restart">${sim.ransomRestart}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function deskRansomResultModal() {
+  const sim = c().sim;
+  const flags = state.desk.flags;
+  const text = flags.pay ? sim.ransomPaid : flags.disconnect ? sim.ransomContained : sim.ransomRestarted;
+  const cls = flags.disconnect ? "good" : "bad";
+  return `
+    <div class="feedback ${cls}">
+      <strong>${flags.pay ? sim.ransomPay : flags.disconnect ? sim.ransomDisconnect : sim.ransomRestart}</strong>
+      <p>${text}</p>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskPhoneModal() {
+  const sim = c().sim;
+  const contacts = [
+    ["call_it", sim.contactIT, sim.contactITRole],
+    ["call_circl", sim.contactCIRCL, sim.contactCIRCLRole],
+    ["call_cnpd", sim.contactCNPD, sim.contactCNPDRole],
+    ["call_bank", sim.contactBank, sim.contactBankRole],
+    ["call_police", sim.contactPolice, sim.contactPoliceRole],
+  ];
+  return `
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.contactsTitle}</span>
+        <span class="app-sub">${sim.contactsSubtitle}</span>
+      </div>
+      <div class="contact-list">
+        ${contacts
+          .map(([id, name, role]) => {
+            const called = has(id);
+            return `
+              <div class="contact-row">
+                <div class="contact-info">
+                  <span class="avatar soft">${initials(name)}</span>
+                  <div><strong>${esc(name)}</strong><span>${esc(role)}</span></div>
+                </div>
+                <button class="${called ? "secondary" : "primary"}" data-action="desk-action" data-id="${id}">
+                  ${called ? sim.called : sim.call}
+                </button>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskFilesModal() {
+  const sim = c().sim;
+  return `
+    <div class="phone-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.files}</span>
+        <span class="app-sub">${sim.laptop}</span>
+      </div>
+      <div class="file-list">
+        <button class="file-row" data-action="desk-open" data-target="document" data-doc="beneficiaries">
+          <span class="file-icon">📄</span>
+          <span>${sim.beneficiaries}</span>
+        </button>
+        <button class="file-row" data-action="desk-open" data-target="document" data-doc="finance">
+          <span class="file-icon">📁</span>
+          <span>${sim.finance}</span>
+        </button>
+      </div>
+    </div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskDocumentModal() {
+  const sim = c().sim;
+  const doc = state.desk.doc;
+  const title = doc === "finance" ? sim.finance : sim.beneficiaries;
+  const text = doc === "finance" ? sim.docFinance : sim.docBeneficiaries;
+  return `
+    <p class="eyebrow">${sim.laptop}</p>
+    <h2>${esc(title)}</h2>
+    <p>${esc(text)}</p>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskNoteModal() {
+  const sim = c().sim;
+  return `
+    <div class="desk-sticky large">${esc(sim.noteText)}</div>
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
+function deskLogModal() {
+  const sim = c().sim;
+  return `
+    <h2>${sim.logTitle}</h2>
+    <p>${sim.logSubtitle}</p>
+    ${state.desk.error === "log" ? `<div class="feedback partial"><p>${sim.logIncomplete}</p></div>` : ""}
+    <form id="desk-log-form" novalidate>
+      ${logFields("desk")}
+      <button class="primary" type="submit">${sim.saveLog}</button>
+    </form>
+  `;
+}
+
+function deskMessageModal() {
+  const sim = c().sim;
+  return `
+    <div class="chat-app">
+      <div class="app-bar">
+        <span class="app-title">${sim.messageTitle}</span>
+        <span class="app-sub">${sim.messageSubtitle}</span>
+      </div>
+      <div class="chat-bubble">${sim.messageSubtitle}</div>
+      ${state.desk.error === "message" ? `<div class="feedback partial" style="margin:0 1rem .8rem"><p>${sim.messageIncomplete}</p></div>` : ""}
+      <textarea id="desk-message" class="chat-input" maxlength="1200" placeholder="${esc(sim.messagePlaceholder)}"></textarea>
+      <div class="btn-row" style="padding:0 1rem 1rem">
+        <button class="secondary" data-action="desk-message-template">${sim.template}</button>
+        <button class="primary" data-action="desk-message-send" data-value="honest">${sim.sendMessage}</button>
+        <button class="ghost" data-action="desk-message-send" data-value="false">${sim.falseMessage}</button>
+      </div>
+    </div>
+  `;
+}
+
+function treeRow(label, points, taken) {
+  return `
+    <div class="tree-branch ${taken ? "taken" : ""}">
+      <span>${esc(label)}</span>
+      <span>${points > 0 ? "+" : ""}${points}</span>
+    </div>
+  `;
+}
+
+function deskDebriefModal() {
+  const sim = c().sim;
+  const score = computeScore();
+  const categories = [
+    [sim.recognition, score.recognition, 20],
+    [sim.contain, score.contain, 20],
+    [sim.calls, score.calls, 20],
+    [sim.record, score.record, 20],
+    [sim.communicate, score.communicate, 20],
+  ];
+  const correct = [
+    ["report_email", sim.reportIt],
+    ["disconnect", sim.containDisconnect],
+    ["call_it", sim.contactIT],
+    ["call_circl", sim.contactCIRCL],
+    ["log", sim.saveLog],
+    ["message", sim.sendMessage],
+  ];
+
+  return `
+    <p class="eyebrow">${sim.control}</p>
+    <p class="score-big">${score.total}<small> / 100</small></p>
+
+    <ul class="summary-list">
+      ${categories
+        .map(
+          ([label, value, max]) =>
+            `<li><span>${esc(label)}</span><span class="pts">${value}/${max}</span></li>`
+        )
+        .join("")}
+      <li><span>${sim.penalties}</span><span class="pts">${score.penalties}</span></li>
+    </ul>
+
+    <h3>${sim.correctPath}</h3>
+    <ul class="summary-list">
+      ${correct
+        .map(
+          ([id, label]) =>
+            `<li><span>${has(id) ? "✓" : "○"} ${esc(label)}</span><span class="pts">${
+              has(id) ? sim.done : sim.missed
+            }</span></li>`
+        )
+        .join("")}
+    </ul>
+
+    <h3>${sim.treeTitle}</h3>
+    <div class="tree">
+      <div class="tree-root">${sim.mail}</div>
+      ${treeRow(sim.openEmail, 10, has("open_email"))}
+      ${treeRow(sim.reportIt, 10, has("report_email"))}
+      ${treeRow(sim.openInvoice, -15, has("click_link"))}
+      ${treeRow(sim.deleteIt, -5, has("delete_email"))}
+      <div class="tree-root">${sim.ransomTitle}</div>
+      ${treeRow(sim.containDisconnect, 10, has("disconnect"))}
+      ${treeRow(sim.ransomPay, -20, has("pay_ransom"))}
+      ${treeRow(sim.ransomRestart, -10, has("restart"))}
+      <div class="tree-root">${sim.contactsTitle}</div>
+      ${treeRow(sim.contactIT, 10, has("call_it"))}
+      ${treeRow(sim.contactCIRCL, 10, has("call_circl"))}
+      ${treeRow(sim.contactCNPD, 5, has("call_cnpd"))}
+      ${treeRow(sim.contactBank, 5, has("call_bank"))}
+      ${treeRow(sim.contactPolice, 5, has("call_police"))}
+      <div class="tree-root">${sim.logTitle}</div>
+      ${treeRow(sim.saveLog, 20, has("log"))}
+      <div class="tree-root">${sim.messageTitle}</div>
+      ${treeRow(sim.sendMessage, 20, has("message"))}
+      ${treeRow(sim.falseMessage, -10, has("false_message"))}
+    </div>
+
+    <h3>${sim.path}</h3>
+    <ul class="summary-list">
+      ${
+        state.desk.path.length
+          ? state.desk.path
+              .map(
+                (item) =>
+                  `<li><span>${esc(item.label)}</span><span class="pts">${
+                    item.points > 0 ? "+" : ""
+                  }${item.points}</span></li>`
+              )
+              .join("")
+          : `<li><span>—</span><span class="pts">0</span></li>`
+      }
+    </ul>
+
+    <button class="secondary" data-action="desk-close">${sim.close}</button>
+  `;
+}
+
 function scenarioView() {
   const scenario = c().scenarios[state.scenarioId];
   const screens = {
+    desk: deskView,
     inbox: inboxView,
     email: emailView,
     fakeLogin: fakeLoginView,
@@ -861,6 +1416,66 @@ document.addEventListener("click", (event) => {
 
   if (action === "go") {
     navigate(button.dataset.path || "");
+  } else if (action === "desk-open") {
+    const target = button.dataset.target;
+    state.desk.error = null;
+    if (target === "mail") {
+      doAction("open_mail");
+      state.desk.modal = "mail";
+    } else if (target === "document") {
+      state.desk.doc = button.dataset.doc;
+      state.desk.modal = "document";
+    } else if (target === "beneficiaries" || target === "finance") {
+      state.desk.doc = target;
+      state.desk.modal = "document";
+    } else {
+      state.desk.modal = target;
+    }
+    render();
+  } else if (action === "desk-close") {
+    if (
+      event.target.closest(".desk-modal-close") ||
+      event.target.classList.contains("desk-modal-backdrop")
+    ) {
+      state.desk.modal = null;
+      state.desk.doc = null;
+      state.desk.error = null;
+      render();
+    }
+  } else if (action === "desk-action") {
+    const id = button.dataset.id;
+    if (doAction(id)) {
+      if (id === "open_email") state.desk.modal = "email";
+      else if (id === "report_email") state.desk.modal = "reported";
+      else if (id === "click_link") state.desk.modal = "fakeLogin";
+      else if (id === "delete_email") state.desk.modal = "deleted";
+      else if (id === "disconnect" || id === "pay_ransom" || id === "restart")
+        state.desk.modal = "ransomResult";
+      else if (id.startsWith("call_")) state.desk.modal = "phone";
+    }
+    render();
+  } else if (action === "desk-message-template") {
+    const field = $("#desk-message");
+    if (field) field.value = c().sim.templateText;
+  } else if (action === "desk-message-send") {
+    const value = button.dataset.value;
+    if (value === "false") {
+      doAction("false_message");
+      state.desk.modal = "debrief";
+      state.desk.error = null;
+    } else {
+      const message = $("#desk-message")?.value.trim() || "";
+      if (!message) {
+        state.desk.error = "message";
+        render();
+        return;
+      }
+      state.message = message;
+      doAction("message");
+      state.desk.modal = "debrief";
+      state.desk.error = null;
+    }
+    render();
   } else if (action === "lang") {
     const next = button.dataset.lang;
     if (CONTENT[next]) {
@@ -947,6 +1562,23 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("submit", (event) => {
+  if (event.target.id === "desk-log-form") {
+    event.preventDefault();
+    const log = readLog("desk");
+    state.log = log;
+    const complete = Object.values(log).every((value) => value.trim().length > 0);
+    if (!complete) {
+      state.desk.error = "log";
+      render();
+      return;
+    }
+    doAction("log");
+    state.desk.modal = "debrief";
+    state.desk.error = null;
+    render();
+    return;
+  }
+
   if (event.target.id === "scenario-log-form") {
     event.preventDefault();
     state.log = readLog("scenario");
