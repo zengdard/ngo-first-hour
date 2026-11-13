@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="9:14 — The First Hour: a cybersecurity incident-response game for NGOs." />
+  <meta name="theme-color" content="#0f172a" />
+  <title>9:14 — The First Hour</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#app">Skip to content</a>
+
+  <header class="topbar">
+    <button class="brand" data-nav="home" aria-label="Home">
+      9:14 <span id="brand-sub">The First Hour</span>
+    </button>
+
+    <div class="topbar-right">
+      <nav aria-label="Main navigation">
+        <button id="nav-home" data-nav="home">Home</button>
+        <button id="nav-group" data-nav="group-select">Group game</button>
+        <button id="nav-individual" data-nav="individual">Individual game</button>
+      </nav>
+
+      <div class="lang" role="group" aria-label="Language">
+        <button data-action="lang" data-lang="en" class="active" aria-pressed="true">EN</button>
+        <button data-action="lang" data-lang="fr" aria-pressed="false">FR</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="footer">
+    <p id="footer-text">Cybersecurity for NGOs — Session 3 · No account · No data stored</p>
+  </footer>
+
+  <script src="content.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

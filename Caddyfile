@@ -1,0 +1,4 @@
+{$GAME_DOMAIN:game.example.org} {
+    encode gzip
+    reverse_proxy game:80
+}

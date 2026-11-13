@@ -1,0 +1,27 @@
+services:
+  game:
+    build: .
+    container_name: ngo-first-hour
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ngo-first-hour-caddy
+    restart: unless-stopped
+    environment:
+      GAME_DOMAIN: ${GAME_DOMAIN:-game.example.org}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - game
+
+volumes:
+  caddy_data:
+  caddy_config:
