@@ -224,7 +224,7 @@ function groupView() {
   const phishing = c().scenarios.phishing;
   const laptop = c().scenarios.laptop;
   return `
-    <p class="eyebrow">${sim.demoTitle}</p>
+    <p class="eyebrow">${c().ui.groupSelectEyebrow}</p>
     <h1>${c().ui.groupSelectTitle}</h1>
     <p class="lede">${c().ui.groupSelectLede}</p>
 
@@ -622,10 +622,18 @@ function deviceView() {
 function laptopResultView() {
   const sim = c().sim;
   const wait = state.laptopAction === "wait";
+  const label =
+    state.laptopAction === "passwords"
+      ? sim.laptopPasswords
+      : state.laptopAction === "report"
+      ? sim.laptopReport
+      : state.laptopAction === "wait"
+      ? sim.laptopWait
+      : sim.laptopWipe;
   return `
     ${cueBlock("cueLaptopData")}
     <div class="feedback ${wait ? "bad" : "good"}">
-      <strong>${wait ? sim.laptopWait : sim.laptopWipe}</strong>
+      <strong>${label}</strong>
       <p>${wait ? sim.laptopWaitResult : sim.laptopDone}</p>
     </div>
     <button class="primary" data-action="to-contacts-laptop">${sim.continue}</button>
@@ -864,10 +872,9 @@ document.addEventListener("click", (event) => {
     const text = button.dataset.copy || "";
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        const old = button.textContent;
-        button.textContent = c().sim.copy;
+        button.textContent = c().sim.copied;
         setTimeout(() => {
-          button.textContent = old;
+          button.textContent = c().sim.copy;
         }, 1200);
       });
     }

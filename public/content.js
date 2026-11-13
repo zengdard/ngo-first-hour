@@ -227,6 +227,7 @@ const CONTENT = {
       colleagueName: "Jane Doe",
       colleagueSubject: "Re: beneficiary list",
       copy: "Copy",
+      copied: "Copied",
       tapEmail: "Tap the email to open it.",
       template: "Use the template",
       takeaways: [
@@ -898,6 +899,7 @@ const CONTENT = {
       colleagueName: "Jane Doe",
       colleagueSubject: "Re : liste des bénéficiaires",
       copy: "Copier",
+      copied: "Copié",
       tapEmail: "Touchez l'email pour l'ouvrir.",
       template: "Utiliser le modèle",
       takeaways: [
