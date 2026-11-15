@@ -232,6 +232,9 @@ const CONTENT = {
       correctPath: "Correct path",
       close: "Close",
       deskHint: "Click the objects on the desk. Follow the five steps.",
+      legalTitle: "Legal clocks",
+      legalNotice:
+        "GDPR/CNPD: 72 h if personal data risk. NIS2: 24 h / 72 h / 1 month only if in scope, to ILR/CSSF via SERIMA. CIRCL: report ASAP.",
       noteText: "9:14 — weird email. The volunteer clicked. The laptop is making noise.",
       docBeneficiaries: "240 names, addresses and phone numbers. Personal data.",
       docFinance: "Bank statements, invoices and donor details. Financial data.",
@@ -936,6 +939,9 @@ const CONTENT = {
       correctPath: "Marche à suivre",
       close: "Fermer",
       deskHint: "Cliquez sur les objets du bureau. Suivez les cinq étapes.",
+      legalTitle: "Délais légaux",
+      legalNotice:
+        "RGPD/CNPD : 72 h si risque sur les données personnelles. NIS2 : 24 h / 72 h / 1 mois seulement si concerné, auprès de l'ILR/CSSF via SERIMA. CIRCL : signalez dès que possible.",
       noteText: "9:14 — email bizarre. La bénévole a cliqué. L'ordinateur fait du bruit.",
       docBeneficiaries: "240 noms, adresses et numéros de téléphone. Données personnelles.",
       docFinance: "Relevés bancaires, factures et coordonnées des donateurs. Données financières.",

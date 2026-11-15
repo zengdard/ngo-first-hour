@@ -11,6 +11,7 @@ A phone-first, bilingual (EN/FR) incident-response game for NGO training.
 - **Score & control:** a decision tree scores recognition, containment, calls, record and communication, then shows the path and the missed branches.
 - Scenario A includes a **fake bank login screen imitation**, shown only after a wrong click, to make the consequence tangible.
 - **No account, no backend, no data stored.** Everything runs in the browser.
+- **Legal clocks:** GDPR/CNPD 72 h; NIS2 24 h / 72 h / 1 month only if in scope; CIRCL ASAP. See [`docs/LEGAL-5-STEPS.md`](docs/LEGAL-5-STEPS.md).
 
 ## Direct URLs for QR codes
 

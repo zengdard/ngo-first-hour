@@ -1190,6 +1190,8 @@ function deskDebriefModal() {
       ${treeRow(sim.falseMessage, -10, has("false_message"))}
     </div>
 
+    <div class="notice"><strong>${sim.legalTitle}</strong><p>${sim.legalNotice}</p></div>
+
     <h3>${sim.path}</h3>
     <ul class="summary-list">
       ${
@@ -1374,6 +1376,7 @@ function individualLogView() {
     </div>
 
     <div class="notice">${ui.beforeYouWrite}</div>
+    <div class="notice" style="background:#fffbeb;border-color:#fde68a;color:#78350f"><strong>${sim.legalTitle}</strong><p style="margin:.3rem 0 0">${sim.legalNotice}</p></div>
 
     <form id="individual-log-form" novalidate>
       ${logFields("individual")}
